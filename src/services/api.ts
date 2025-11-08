@@ -11,8 +11,73 @@ export interface TranscriptionResult {
   date: string;
 }
 
+// Enhanced health check with better error handling
+export const checkApiHealth = async (): Promise<boolean> => {
+  try {
+    console.log('🔍 Checking API health at:', `${API_URL}/api/health`);
+    
+    const response = await axios.get(`${API_URL}/api/health`, {
+      timeout: 5000, // 5 second timeout
+      headers: {
+        'Accept': 'application/json',
+      }
+    });
+    
+    console.log('✅ Health check response:', response.data);
+    
+    // Check if the response has the expected structure
+    if (response.data && response.data.status === 'healthy') {
+      return true;
+    }
+    
+    console.log('❌ Health check failed - unexpected response structure:', response.data);
+    return false;
+    
+  } catch (error) {
+    console.error('❌ Health check error:', error);
+    
+    if (axios.isAxiosError(error)) {
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        url: error.config?.url
+      });
+    }
+    
+    return false;
+  }
+};
+
+// Alternative health check with more details
+export const getApiHealthDetails = async (): Promise<{
+  healthy: boolean;
+  message?: string;
+  error?: string;
+}> => {
+  try {
+    const response = await axios.get(`${API_URL}/api/health`, {
+      timeout: 5000
+    });
+    
+    return {
+      healthy: response.data.status === 'healthy',
+      message: response.data.message || 'API is healthy',
+      error: undefined
+    };
+    
+  } catch (error) {
+    return {
+      healthy: false,
+      message: 'API is offline',
+      error: axios.isAxiosError(error) ? error.message : 'Unknown error'
+    };
+  }
+};
+
 export const transcribeFile = async (
-  file: File, 
+  file: File,
   onProgress?: (progress: number) => void
 ): Promise<TranscriptionResult> => {
   const formData = new FormData();
@@ -23,7 +88,7 @@ export const transcribeFile = async (
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      timeout: 300000, // 5 minutes
+      timeout: 300000,
       maxContentLength: MAX_FILE_SIZE,
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
@@ -53,19 +118,9 @@ export const transcribeFile = async (
   }
 };
 
-// Health check function
-export const checkApiHealth = async (): Promise<boolean> => {
-  try {
-    const response = await axios.get(`${API_URL}/api/health`);
-    return response.data.status === 'healthy';
-  } catch (error) {
-    return false;
-  }
-};
-
 // Retry logic for failed requests
 export const transcribeFileWithRetry = async (
-  file: File, 
+  file: File,
   onProgress?: (progress: number) => void,
   maxRetries = 3
 ): Promise<TranscriptionResult> => {
@@ -74,7 +129,6 @@ export const transcribeFileWithRetry = async (
       return await transcribeFile(file, onProgress);
     } catch (error) {
       if (i === maxRetries - 1) throw error;
-      // Wait before retrying (exponential backoff)
       await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
     }
   }

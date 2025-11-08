@@ -1,22 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Mic, Menu, X, Wifi, WifiOff } from 'lucide-react';
-import { checkApiHealth } from '../services/api';
+import { Mic, Menu, X, Wifi, WifiOff, AlertTriangle, RefreshCw } from 'lucide-react';
+import { checkApiHealth, getApiHealthDetails } from '../services/api';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [isHealthy, setIsHealthy] = useState(true);
+  const [healthDetails, setHealthDetails] = useState<{ healthy: boolean; message?: string; error?: string }>({ healthy: true });
+  const [isChecking, setIsChecking] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
     const checkHealth = async () => {
-      const healthy = await checkApiHealth();
-      setIsHealthy(healthy);
+      try {
+        setIsChecking(true);
+        console.log('🔍 Checking backend health...');
+        
+        const details = await getApiHealthDetails();
+        setHealthDetails(details);
+        setIsHealthy(details.healthy);
+        
+        console.log('✅ Health check result:', details);
+      } catch (error) {
+        console.error('❌ Health check failed:', error);
+        setIsHealthy(false);
+        setHealthDetails({ healthy: false, error: 'Check failed' });
+      } finally {
+        setIsChecking(false);
+      }
     };
-    
+
+    // Check immediately on mount
     checkHealth();
+    
+    // Then check every 30 seconds
     const interval = setInterval(checkHealth, 30000);
     
     return () => clearInterval(interval);
@@ -29,6 +48,10 @@ const Navbar = () => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  const handleManualCheck = () => {
+    checkHealth();
+  };
 
   const navLinks = [
     { name: 'Home', path: '/' },
@@ -72,9 +95,14 @@ const Navbar = () => {
               </Link>
             ))}
             
-            {/* Backend Status Indicator */}
+            {/* Enhanced Backend Status Indicator */}
             <div className="flex items-center space-x-2 ml-4">
-              {isHealthy ? (
+              {isChecking ? (
+                <>
+                  <div className="h-4 w-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-xs text-yellow-400">Checking...</span>
+                </>
+              ) : isHealthy ? (
                 <>
                   <Wifi className="h-4 w-4 text-green-400" />
                   <span className="text-xs text-green-400">Online</span>
@@ -85,6 +113,15 @@ const Navbar = () => {
                   <span className="text-xs text-red-400">Offline</span>
                 </>
               )}
+              
+              {/* Manual refresh button */}
+              <button
+                onClick={handleManualCheck}
+                className="p-1 rounded hover:bg-gray-700 transition-colors"
+                title="Check connection"
+              >
+                <RefreshCw className={`h-3 w-3 ${isChecking ? 'animate-spin' : ''} text-gray-400 hover:text-white`} />
+              </button>
             </div>
           </div>
 
@@ -125,7 +162,12 @@ const Navbar = () => {
             ))}
             {/* Mobile status */}
             <div className="px-3 py-2 flex items-center space-x-2">
-              {isHealthy ? (
+              {isChecking ? (
+                <>
+                  <div className="h-4 w-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm text-yellow-400">Checking...</span>
+                </>
+              ) : isHealthy ? (
                 <>
                   <Wifi className="h-4 w-4 text-green-400" />
                   <span className="text-sm text-green-400">Backend Online</span>
