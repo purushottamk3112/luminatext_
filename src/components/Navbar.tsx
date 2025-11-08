@@ -75,7 +75,7 @@ const Navbar = () => {
               <Mic className="h-8 w-8 text-purple-400" />
             </motion.div>
             <span className="ml-2 text-xl font-bold bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
-              LuminText
+              LuminaText
             </span>
           </Link>
 
