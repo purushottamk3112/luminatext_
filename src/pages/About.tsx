@@ -146,7 +146,7 @@ const About = () => {
                 />
                 <div className="p-6">
                   <h3 className="text-xl font-semibold text-white">
-                    Purushottam Kr.
+                    Vivaan Singh
                   </h3>
                   <p className="text-purple-400 mb-3">ML & AI Engineer</p>
                   <p className="text-gray-300">
