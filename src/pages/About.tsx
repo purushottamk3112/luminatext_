@@ -150,7 +150,7 @@ const About = () => {
                   </h3>
                   <p className="text-purple-400 mb-3">ML & AI Engineer</p>
                   <p className="text-gray-300">
-                    I'm Purushottam – a machine learning enthusiast who spends way too much time thinking about how language and AI intersect. While I nerd out over algorithms and NLP, what really gets me excited is breaking down complex tech into tools anyone can use
+                    I'm Vivaan – a machine learning enthusiast who spends way too much time thinking about how language and AI intersect. While I nerd out over algorithms and NLP, what really gets me excited is breaking down complex tech into tools anyone can use
                     
                   </p>
                 </div>
