@@ -27,7 +27,7 @@ const Footer = () => {
             <h3 className="text-lg font-semibold mb-4 text-white">Connect</h3>
             <div className="flex space-x-4">
               <a 
-                href="https://github.com/purushottamk3112" 
+                href="https://github.com/purushottamk112" 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="text-gray-400 hover:text-white transition-colors"
@@ -35,7 +35,7 @@ const Footer = () => {
                 <Github size={20} />
               </a>
               <a 
-                href="https://x.com/kpurushottam31" 
+                href="https://x.com/kpurushotam31" 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="text-gray-400 hover:text-white transition-colors"
@@ -43,7 +43,7 @@ const Footer = () => {
                 <Twitter size={20} />
               </a>
               <a 
-                href="https://www.linkedin.com/in/pkumar8287/" 
+                href="https://www.linkedin.com/in/pkumar82/" 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="text-gray-400 hover:text-white transition-colors"
