@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_URL = 'https://luminabackend.netlify.app';
+const API_URL = 'https://lumina-backend-v9pe.onrender.com';
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 export interface TranscriptionResult {
   text: string;
@@ -13,22 +14,22 @@ export interface TranscriptionResult {
 export const transcribeFile = async (file: File): Promise<TranscriptionResult> => {
   const formData = new FormData();
   formData.append('file', file);
-  
+
   try {
     const response = await axios.post(`${API_URL}/api/transcribe`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      // Add timeout and max size validation
+      // Updated timeout and size for your new backend (100MB)
       timeout: 300000, // 5 minutes
-      maxContentLength: 25 * 1024 * 1024, // 25MB
+      maxContentLength: 100 * 1024 * 1024, // 100MB (your new backend limit)
     });
-    
+
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
       if (error.response?.status === 413) {
-        throw new Error('File size exceeds 25MB limit');
+        throw new Error('File size exceeds 100MB limit');
       }
       throw new Error(error.response?.data?.detail || 'Error transcribing file');
     }
