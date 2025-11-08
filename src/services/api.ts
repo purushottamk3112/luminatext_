@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'https://lumina-backend-v9pe.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://lumina-backend-v9pe.onrender.com';
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 export interface TranscriptionResult {
@@ -11,7 +11,10 @@ export interface TranscriptionResult {
   date: string;
 }
 
-export const transcribeFile = async (file: File): Promise<TranscriptionResult> => {
+export const transcribeFile = async (
+  file: File, 
+  onProgress?: (progress: number) => void
+): Promise<TranscriptionResult> => {
   const formData = new FormData();
   formData.append('file', file);
 
@@ -20,20 +23,33 @@ export const transcribeFile = async (file: File): Promise<TranscriptionResult> =
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      // Updated timeout and size for your new backend (100MB)
       timeout: 300000, // 5 minutes
-      maxContentLength: 100 * 1024 * 1024, // 100MB (your new backend limit)
+      maxContentLength: MAX_FILE_SIZE,
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress(percentCompleted);
+        }
+      },
     });
 
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      if (error.response?.status === 413) {
-        throw new Error('File size exceeds 100MB limit');
+      switch (error.response?.status) {
+        case 413:
+          throw new Error('File size exceeds 100MB limit');
+        case 429:
+          throw new Error('Rate limit exceeded. Please try again later');
+        case 503:
+          throw new Error('Service temporarily unavailable. Please try again');
+        case 504:
+          throw new Error('Request timeout. Please try with a smaller file');
+        default:
+          throw new Error(error.response?.data?.detail || 'Error transcribing file');
       }
-      throw new Error(error.response?.data?.detail || 'Error transcribing file');
     }
-    throw error;
+    throw new Error('Network error. Please check your connection');
   }
 };
 
@@ -45,4 +61,22 @@ export const checkApiHealth = async (): Promise<boolean> => {
   } catch (error) {
     return false;
   }
+};
+
+// Retry logic for failed requests
+export const transcribeFileWithRetry = async (
+  file: File, 
+  onProgress?: (progress: number) => void,
+  maxRetries = 3
+): Promise<TranscriptionResult> => {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await transcribeFile(file, onProgress);
+    } catch (error) {
+      if (i === maxRetries - 1) throw error;
+      // Wait before retrying (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+    }
+  }
+  throw new Error('Max retries exceeded');
 };

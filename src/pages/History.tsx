@@ -1,72 +1,70 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { FileText, Download, Trash2, Search } from 'lucide-react';
-
-// Mock data for demonstration
-const mockTranscriptions = [
-  {
-    id: 1,
-    fileName: 'interview_session.mp3',
-    date: '2025-04-15',
-    duration: '32:15',
-    fileSize: '18.4 MB',
-    preview: 'In this interview, we discussed the future of artificial intelligence and its impact on society...'
-  },
-  {
-    id: 2,
-    fileName: 'product_demo.mp4',
-    date: '2025-04-10',
-    duration: '15:42',
-    fileSize: '24.1 MB',
-    preview: 'Welcome to this product demonstration. Today we\'ll be showing you the new features of our software...'
-  },
-  {
-    id: 3,
-    fileName: 'meeting_notes.wav',
-    date: '2025-04-05',
-    duration: '45:30',
-    fileSize: '22.7 MB',
-    preview: 'Let\'s begin our quarterly meeting. First on the agenda is the review of our Q1 performance...'
-  },
-  {
-    id: 4,
-    fileName: 'podcast_episode.mp3',
-    date: '2025-03-28',
-    duration: '28:17',
-    fileSize: '16.2 MB',
-    preview: 'Hello and welcome to another episode of Tech Talks. Today we have a special guest from Silicon Valley...'
-  },
-  {
-    id: 5,
-    fileName: 'lecture_ai_ethics.mp4',
-    date: '2025-03-20',
-    duration: '52:08',
-    fileSize: '23.9 MB',
-    preview: 'Good morning everyone. Today\'s lecture will focus on the ethical considerations in artificial intelligence...'
-  }
-];
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FileText, Download, Trash2, Search, Clock, FileAudio, FileVideo } from 'lucide-react';
+import { TranscriptionHistory, getTranscriptions, deleteTranscription, searchTranscriptions } from '../services/storage';
 
 const History = () => {
-  const [transcriptions, setTranscriptions] = useState(mockTranscriptions);
+  const [transcriptions, setTranscriptions] = useState<TranscriptionHistory[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedTranscription, setSelectedTranscription] = useState<number | null>(null);
+  const [selectedTranscription, setSelectedTranscription] = useState<TranscriptionHistory | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadTranscriptions();
+  }, []);
+
+  const loadTranscriptions = () => {
+    setIsLoading(false);
+    setTranscriptions(getTranscriptions());
+  };
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
   };
 
-  const filteredTranscriptions = transcriptions.filter(
-    (item) => 
-      item.fileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.preview.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   const handleDelete = (id: number) => {
-    setTranscriptions(transcriptions.filter(item => item.id !== id));
-    if (selectedTranscription === id) {
-      setSelectedTranscription(null);
+    if (window.confirm('Are you sure you want to delete this transcription?')) {
+      deleteTranscription(id);
+      loadTranscriptions();
+      if (selectedTranscription?.id === id) {
+        setSelectedTranscription(null);
+      }
     }
   };
+
+  const downloadTranscription = (transcription: TranscriptionHistory) => {
+    const element = document.createElement('a');
+    const fileBlob = new Blob([transcription.text], { type: 'text/plain' });
+    element.href = URL.createObjectURL(fileBlob);
+    element.download = `${transcription.fileName.split('.')[0]}-transcription.txt`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
+  const filteredTranscriptions = searchTerm 
+    ? searchTranscriptions(searchTerm)
+    : transcriptions;
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="pt-24 pb-16 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading transcriptions...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pt-24 pb-16">
@@ -86,10 +84,15 @@ const History = () => {
             Access and manage all your previous transcriptions
           </p>
         </motion.div>
-        
+
         {/* Search Bar */}
-        <div className="mb-8">
-          <div className="relative">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="mb-8"
+        >
+          <div className="relative max-w-md mx-auto">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-5 w-5 text-gray-400" />
             </div>
@@ -101,117 +104,159 @@ const History = () => {
               onChange={handleSearch}
             />
           </div>
-        </div>
-        
-        {/* Transcription List */}
+        </motion.div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* List Panel */}
           <div className="lg:col-span-1">
-            <div className="bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="bg-gray-800 rounded-xl shadow-lg overflow-hidden"
+            >
               <div className="p-4 bg-gray-700">
                 <h2 className="text-lg font-semibold text-white">Recent Transcriptions</h2>
+                <p className="text-sm text-gray-400 mt-1">{transcriptions.length} total</p>
               </div>
               
-              <div className="divide-y divide-gray-700">
-                {filteredTranscriptions.length > 0 ? (
-                  filteredTranscriptions.map((item) => (
+              <div className="max-h-96 overflow-y-auto">
+                <AnimatePresence>
+                  {filteredTranscriptions.length > 0 ? (
+                    filteredTranscriptions.map((item) => (
+                      <motion.div
+                        key={item.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className={`p-4 cursor-pointer transition-colors border-l-4 ${
+                          selectedTranscription?.id === item.id
+                            ? 'bg-purple-900/30 border-purple-500'
+                            : 'border-transparent hover:bg-gray-700/50'
+                        }`}
+                        onClick={() => setSelectedTranscription(item)}
+                      >
+                        <div className="flex items-start">
+                          {item.fileName.endsWith('.mp3') || item.fileName.endsWith('.wav') ? (
+                            <FileAudio className="h-5 w-5 text-blue-400 mr-3 mt-1 flex-shrink-0" />
+                          ) : (
+                            <FileVideo className="h-5 w-5 text-green-400 mr-3 mt-1 flex-shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">
+                              {item.fileName}
+                            </p>
+                            <div className="flex items-center text-xs text-gray-400 mt-1">
+                              <Clock className="h-3 w-3 mr-1" />
+                              <span>{item.duration}</span>
+                              <span className="mx-1">•</span>
+                              <span>{item.fileSize}</span>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {formatDate(item.date)}
+                            </p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))
+                  ) : (
                     <motion.div
-                      key={item.id}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      transition={{ duration: 0.3 }}
-                      className={`p-4 cursor-pointer transition-colors ${
-                        selectedTranscription === item.id 
-                          ? 'bg-purple-900/30 border-l-4 border-purple-500' 
-                          : 'hover:bg-gray-700/50'
-                      }`}
-                      onClick={() => setSelectedTranscription(item.id)}
+                      className="p-8 text-center"
                     >
-                      <div className="flex items-start">
-                        <FileText className={`h-5 w-5 mr-3 mt-1 ${
-                          item.fileName.endsWith('.mp3') || item.fileName.endsWith('.wav') 
-                            ? 'text-blue-400' 
-                            : 'text-green-400'
-                        }`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-white truncate">
-                            {item.fileName}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            {item.date} • {item.duration} • {item.fileSize}
-                          </p>
-                        </div>
-                      </div>
+                      <FileText className="h-16 w-16 text-gray-600 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-400 mb-2">
+                        {searchTerm ? 'No Results Found' : 'No Transcriptions Yet'}
+                      </h3>
+                      <p className="text-gray-500 text-sm">
+                        {searchTerm 
+                          ? 'Try adjusting your search terms' 
+                          : 'Start transcribing files to see them here'}
+                      </p>
                     </motion.div>
-                  ))
-                ) : (
-                  <div className="p-8 text-center">
-                    <p className="text-gray-400">No transcriptions found</p>
-                  </div>
-                )}
+                  )}
+                </AnimatePresence>
               </div>
-            </div>
+            </motion.div>
           </div>
-          
+
           {/* Detail Panel */}
           <div className="lg:col-span-2">
-            <div className="bg-gray-800 rounded-xl shadow-lg h-full">
+            <AnimatePresence mode="wait">
               {selectedTranscription ? (
+                <motion.div
+                  key={selectedTranscription.id}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="bg-gray-800 rounded-xl shadow-lg h-full"
+                >
+                  <div className="p-6 h-full flex flex-col">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center">
+                        {selectedTranscription.fileName.endsWith('.mp3') || 
+                         selectedTranscription.fileName.endsWith('.wav') ? (
+                          <FileAudio className="h-8 w-8 text-blue-400 mr-3" />
+                        ) : (
+                          <FileVideo className="h-8 w-8 text-green-400 mr-3" />
+                        )}
+                        <div>
+                          <h2 className="text-xl font-semibold text-white">
+                            {selectedTranscription.fileName}
+                          </h2>
+                          <div className="flex items-center text-sm text-gray-400 mt-1">
+                            <Clock className="h-4 w-4 mr-1" />
+                            <span>{selectedTranscription.duration}</span>
+                            <span className="mx-2">•</span>
+                            <span>{selectedTranscription.fileSize}</span>
+                            <span className="mx-2">•</span>
+                            <span>{formatDate(selectedTranscription.date)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => downloadTranscription(selectedTranscription)}
+                          className="p-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                          title="Download transcription"
+                        >
+                          <Download className="h-5 w-5 text-white" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(selectedTranscription.id)}
+                          className="p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                          title="Delete transcription"
+                        >
+                          <Trash2 className="h-5 w-5 text-white" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 bg-gray-900 rounded-lg p-6 overflow-y-auto">
+                      <pre className="text-gray-300 whitespace-pre-wrap font-mono text-sm leading-relaxed">
+                        {selectedTranscription.text}
+                      </pre>
+                    </div>
+
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        onClick={() => downloadTranscription(selectedTranscription)}
+                        className="inline-flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-medium transition-colors"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download Text
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ duration: 0.3 }}
-                  className="p-6 h-full flex flex-col"
+                  exit={{ opacity: 0 }}
+                  className="bg-gray-800 rounded-xl shadow-lg h-full flex items-center justify-center p-8"
                 >
-                  {(() => {
-                    const selected = transcriptions.find(t => t.id === selectedTranscription);
-                    if (!selected) return null;
-                    
-                    return (
-                      <>
-                        <div className="flex justify-between items-start mb-6">
-                          <div>
-                            <h2 className="text-xl font-semibold text-white mb-1">
-                              {selected.fileName}
-                            </h2>
-                            <p className="text-sm text-gray-400">
-                              Transcribed on {selected.date} • {selected.duration} • {selected.fileSize}
-                            </p>
-                          </div>
-                          <div className="flex space-x-2">
-                            <button className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors">
-                              <Download className="h-5 w-5 text-gray-300" />
-                            </button>
-                            <button 
-                              className="p-2 bg-gray-700 hover:bg-red-600 rounded-lg transition-colors"
-                              onClick={() => handleDelete(selected.id)}
-                            >
-                              <Trash2 className="h-5 w-5 text-gray-300" />
-                            </button>
-                          </div>
-                        </div>
-                        
-                        <div className="flex-grow bg-gray-900 rounded-lg p-4 overflow-y-auto">
-                          <p className="text-gray-300 whitespace-pre-line">
-                            {selected.preview}
-                            {/* Extended mock content for demonstration */}
-                            {Array(10).fill(0).map((_, i) => (
-                              <span key={i}>
-                                <br /><br />
-                                Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam auctor, 
-                                nisl eget ultricies tincidunt, nisl nisl aliquam nisl, eget ultricies
-                                nisl nisl eget nisl. Nullam auctor, nisl eget ultricies tincidunt, 
-                                nisl nisl aliquam nisl, eget ultricies nisl nisl eget nisl.
-                              </span>
-                            ))}
-                          </p>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </motion.div>
-              ) : (
-                <div className="flex items-center justify-center h-full p-8">
                   <div className="text-center">
                     <FileText className="h-16 w-16 text-gray-600 mx-auto mb-4" />
                     <h3 className="text-xl font-medium text-gray-400 mb-2">No Transcription Selected</h3>
@@ -219,36 +264,11 @@ const History = () => {
                       Select a transcription from the list to view its details
                     </p>
                   </div>
-                </div>
+                </motion.div>
               )}
-            </div>
+            </AnimatePresence>
           </div>
         </div>
-        
-        {/* Empty State */}
-        {transcriptions.length === 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="mt-8 bg-gray-800 rounded-xl p-12 text-center"
-          >
-            <FileText className="h-16 w-16 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-xl font-medium text-gray-300 mb-2">No Transcriptions Yet</h3>
-            <p className="text-gray-400 mb-6">
-              You haven't created any transcriptions yet. Start by uploading an audio or video file.
-            </p>
-            <a 
-              href="/transcribe" 
-              className="inline-flex items-center px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-medium transition-colors"
-            >
-              Create Your First Transcription
-              <svg className="ml-2 -mr-1 w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </a>
-          </motion.div>
-        )}
       </div>
     </div>
   );

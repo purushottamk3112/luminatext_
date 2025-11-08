@@ -1,8 +1,126 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { FileAudio, FileVideo, Clock, Rocket } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  FileAudio, 
+  FileVideo, 
+  Upload, 
+  FileText, 
+  AlertCircle, 
+  CheckCircle,
+  Clock,
+  Download,
+  X,
+  RefreshCw
+} from 'lucide-react';
+import { transcribeFileWithRetry, TranscriptionResult } from '../services/api';
+import { saveTranscription } from '../services/storage';
 
 const Transcribe = () => {
+  const [file, setFile] = useState<File | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [result, setResult] = useState<TranscriptionResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [dragActive, setDragActive] = useState(false);
+
+  const handleFileSelect = useCallback((selectedFile: File) => {
+    // Validate file type
+    const validTypes = [
+      'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/wave', 
+      'video/mp4', 'video/mpeg', 'video/quicktime'
+    ];
+    
+    if (!validTypes.includes(selectedFile.type)) {
+      setError('Please select a valid audio or video file (MP3, WAV, MP4)');
+      return;
+    }
+
+    // Validate file size (100MB limit)
+    if (selectedFile.size > 100 * 1024 * 1024) {
+      setError('File size must be less than 100MB');
+      return;
+    }
+
+    setFile(selectedFile);
+    setError(null);
+    setResult(null);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile) {
+      handleFileSelect(droppedFile);
+    }
+  }, [handleFileSelect]);
+
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  }, []);
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      handleFileSelect(selectedFile);
+    }
+  }, [handleFileSelect]);
+
+  const handleTranscribe = async () => {
+    if (!file) return;
+
+    setIsProcessing(true);
+    setError(null);
+    setProgress(0);
+
+    try {
+      const transcriptionResult = await transcribeFileWithRetry(
+        file, 
+        (progress) => setProgress(progress),
+        3 // max retries
+      );
+      
+      setProgress(100);
+      setResult(transcriptionResult);
+      
+      // Save to history
+      saveTranscription(transcriptionResult);
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred during transcription');
+    } finally {
+      setIsProcessing(false);
+      setProgress(0);
+    }
+  };
+
+  const handleReset = () => {
+    setFile(null);
+    setResult(null);
+    setError(null);
+    setProgress(0);
+  };
+
+  const downloadTranscription = () => {
+    if (!result) return;
+    
+    const element = document.createElement('a');
+    const fileBlob = new Blob([result.text], { type: 'text/plain' });
+    element.href = URL.createObjectURL(fileBlob);
+    element.download = `${result.fileName.split('.')[0]}-transcription.txt`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
   return (
     <div className="pt-24 pb-16 min-h-screen">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -10,101 +128,187 @@ const Transcribe = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
+          className="text-center mb-8"
         >
-          <h1 className="text-3xl md:text-4xl font-bold text-center mb-2">
+          <h1 className="text-3xl md:text-4xl font-bold mb-2">
             <span className="bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
               Transcribe Your Media
             </span>
           </h1>
-          <p className="text-gray-300 text-center mb-8 text-lg">
+          <p className="text-gray-300 text-lg">
             Transform your audio and video files into text with our AI-powered transcription service.
           </p>
         </motion.div>
 
-        <div className="bg-gray-800 rounded-xl shadow-xl overflow-hidden">
-          <div className="p-8 md:p-12 flex flex-col items-center text-center">
+        <AnimatePresence mode="wait">
+          {!file && !isProcessing && !result && (
             <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", stiffness: 260, damping: 20 }}
-              className="w-24 h-24 bg-purple-900/30 rounded-full flex items-center justify-center mb-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="bg-gray-800 rounded-xl shadow-xl p-8 mb-8"
             >
-              <Rocket className="h-12 w-12 text-purple-400" />
+              <div
+                onDrop={handleDrop}
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                className={`border-2 border-dashed rounded-lg p-12 text-center transition-all ${
+                  dragActive 
+                    ? 'border-purple-500 bg-purple-900/20' 
+                    : 'border-gray-600 hover:border-purple-500'
+                }`}
+              >
+                <Upload className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-white mb-2">Upload Your File</h3>
+                <p className="text-gray-400 mb-4">
+                  Drag and drop your audio or video file here, or click to browse
+                </p>
+                <input
+                  type="file"
+                  accept="audio/*,video/*"
+                  onChange={handleFileInput}
+                  className="hidden"
+                  id="file-input"
+                />
+                <label
+                  htmlFor="file-input"
+                  className="inline-flex items-center px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-medium cursor-pointer transition-colors"
+                >
+                  Choose File
+                </label>
+                <p className="text-sm text-gray-500 mt-2">
+                  Supported: MP3, WAV, MP4 (Max: 100MB)
+                </p>
+              </div>
             </motion.div>
-            
-            <h2 className="text-2xl font-bold text-white mb-4">
-              Exciting Updates Coming Soon!
-            </h2>
-            
-            <p className="text-gray-300 max-w-2xl mb-8">
-              We're working hard to bring you an amazing transcription experience. Our team is fine-tuning the AI models and optimizing the service for the best possible results. Stay tuned!
-            </p>
-            
-            <div className="flex items-center justify-center space-x-2 text-purple-400">
-              <Clock className="h-5 w-5" />
-              <span className="text-sm">Launch Expected Soon</span>
+          )}
+
+          {file && !isProcessing && !result && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="bg-gray-800 rounded-xl shadow-xl p-8 mb-8"
+            >
+              <div className="text-center">
+                <div className="flex items-center justify-center mb-4">
+                  {file.type.startsWith('audio/') ? (
+                    <FileAudio className="h-16 w-16 text-blue-400" />
+                  ) : (
+                    <FileVideo className="h-16 w-16 text-green-400" />
+                  )}
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">{file.name}</h3>
+                <p className="text-gray-400 mb-6">
+                  Size: {(file.size / (1024 * 1024)).toFixed(2)} MB
+                </p>
+                <div className="flex gap-4 justify-center">
+                  <button
+                    onClick={handleTranscribe}
+                    className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-medium transition-colors"
+                  >
+                    Start Transcription
+                  </button>
+                  <button
+                    onClick={handleReset}
+                    className="px-6 py-3 bg-gray-600 hover:bg-gray-700 rounded-lg text-white font-medium transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {isProcessing && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="bg-gray-800 rounded-xl shadow-xl p-8 mb-8"
+            >
+              <div className="text-center">
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                  className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full mx-auto mb-4"
+                />
+                <h3 className="text-xl font-semibold text-white mb-2">Processing Your File</h3>
+                <p className="text-gray-400 mb-4">
+                  Our AI is transcribing your media. This may take a few moments...
+                </p>
+                <div className="w-full bg-gray-700 rounded-full h-2 mb-4">
+                  <motion.div
+                    className="bg-purple-600 h-2 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progress}%` }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </div>
+                <p className="text-sm text-gray-500">{progress}% complete</p>
+              </div>
+            </motion.div>
+          )}
+
+          {result && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="bg-gray-800 rounded-xl shadow-xl p-8"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center">
+                  <CheckCircle className="h-8 w-8 text-green-400 mr-3" />
+                  <div>
+                    <h3 className="text-xl font-semibold text-white">Transcription Complete</h3>
+                    <p className="text-gray-400">File: {result.fileName}</p>
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={downloadTranscription}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-medium transition-colors flex items-center"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </button>
+                  <button
+                    onClick={handleReset}
+                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg text-white font-medium transition-colors flex items-center"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    New File
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-gray-900 rounded-lg p-6 max-h-96 overflow-y-auto">
+                <pre className="text-gray-300 whitespace-pre-wrap font-mono text-sm">
+                  {result.text}
+                </pre>
+              </div>
+
+              <div className="mt-4 text-sm text-gray-400">
+                <p>Duration: {result.duration} | File Size: {result.fileSize}</p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-red-900/20 border border-red-500 rounded-lg p-4 mb-4"
+          >
+            <div className="flex items-center">
+              <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
+              <p className="text-red-400">{error}</p>
             </div>
-          </div>
-        </div>
-        
-        {/* Feature Preview Section */}
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-gray-800 rounded-xl p-6">
-            <h3 className="text-xl font-semibold text-white mb-3">Upcoming Features</h3>
-            <ul className="space-y-3 text-gray-300">
-              <li className="flex items-center">
-                <FileAudio className="h-5 w-5 text-purple-400 mr-2" />
-                Support for MP3 & WAV audio files
-              </li>
-              <li className="flex items-center">
-                <FileVideo className="h-5 w-5 text-purple-400 mr-2" />
-                MP4 video transcription
-              </li>
-              <li className="flex items-center">
-                <svg className="h-5 w-5 text-purple-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
-                </svg>
-                Multi-language support
-              </li>
-              <li className="flex items-center">
-                <svg className="h-5 w-5 text-purple-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                Fast processing times
-              </li>
-            </ul>
-          </div>
-          
-          <div className="bg-gray-800 rounded-xl p-6">
-            <h3 className="text-xl font-semibold text-white mb-3">What to Expect</h3>
-            <ul className="space-y-3 text-gray-300">
-              <li className="flex items-center">
-                <svg className="h-5 w-5 text-purple-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                High accuracy transcription
-              </li>
-              <li className="flex items-center">
-                <svg className="h-5 w-5 text-purple-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                </svg>
-                Easy file uploads up to 25MB
-              </li>
-              <li className="flex items-center">
-                <svg className="h-5 w-5 text-purple-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Download transcriptions instantly
-              </li>
-              <li className="flex items-center">
-                <svg className="h-5 w-5 text-purple-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-                Secure file processing
-              </li>
-            </ul>
-          </div>
-        </div>
+          </motion.div>
+        )}
       </div>
     </div>
   );
